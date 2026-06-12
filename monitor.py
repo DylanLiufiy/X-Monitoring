@@ -30,7 +30,7 @@ def save_last_seen_id(tweet_id):
         f.write(str(tweet_id))
 
 async def translate_via_gemini_ai(text):
-    """【有道免密直连版】彻底抛弃谷歌域名，解决 Name or service not known 报错"""
+    """【语法完美修正版】将反斜杠移出 f-string，彻底兼容所有 Python 版本"""
     if not text or not text.strip():
         return ""
         
@@ -49,8 +49,11 @@ async def translate_via_gemini_ai(text):
     encoded_text = urllib.parse.quote(text)
     url = f"https://youdao.com{encoded_text}"
 
+    # 💡 【修复核心】提前处理好文本，不把 \n 放入 f-string 大括号内部
+    preview_text = text[:50].replace('\n', ' ')
+
     print(f"\n==================== 🔍 有道AI翻译诊断：长度 {len(text)} ====================")
-    print(f"【待翻原文前50字】: {text[:50].replace('\n', ' ')}...")
+    print(f"【待翻原文前50字】: {preview_text}...")
 
     try:
         async with httpx.AsyncClient(timeout=12.0) as client:
@@ -72,8 +75,8 @@ async def translate_via_gemini_ai(text):
                                 translated_text = entry["translate"]
                                 break
                         
-                        if not translated_text and "explain" in entries[0]:
-                            translated_text = entries[0]["explain"]
+                        if not translated_text and "explain" in entries:
+                            translated_text = entries["explain"]
 
                         if translated_text:
                             print(f"【🎉 有道解析成功】成功获取到中文翻译")
