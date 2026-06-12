@@ -1,0 +1,48 @@
+name: X 10s Realtime Monitor
+
+on:
+  push:
+    branches: [ main ]
+  schedule:
+    # 依然保留 5 分钟唤醒。但由于开启了并发排队，只要前一个任务没死，后面的任务就会乖乖排队（Pending）。
+    # 确保当前面任务满 5.8 小时自杀时，排队队列里永远有一个新鲜的“接班人”立刻顶上。
+    - cron: '*/5 * * * *'
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    concurrency:
+      group: x-high-frequency-group
+      cancel-in-progress: false # 关键：绝对不能把正在运行的 10 秒死循环任务掐断！
+
+    steps:
+    - name: 📥 1. 拉取代码
+      uses: actions/checkout@v3
+
+    - name: 🐍 2. 准备 Python 
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: 💾 3. 恢复长效状态缓存
+      uses: actions/cache@v3
+      with:
+        path: |
+          last_seen_id.txt
+          cookies.json
+        key: monitor-cache-${{ github.run_id }}
+        restore-keys: |
+          monitor-cache-
+
+    - name: 📦 4. 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: 📡 5. 启动 5.8小时 常驻死循环监控
+      env:
+        X_USERNAME: ${{ secrets.X_USERNAME }}
+        X_EMAIL: ${{ secrets.X_EMAIL }}
+        X_PASSWORD: ${{ secrets.X_PASSWORD }}
+        FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
+      run: python monitor.py
