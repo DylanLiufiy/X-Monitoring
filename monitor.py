@@ -2,6 +2,7 @@ import os
 import sys
 import asyncio
 import httpx
+import re
 from datetime import datetime
 
 # ==================== 🛠️ 生产级配置中心 ====================
@@ -47,33 +48,38 @@ async def send_to_feishu(text, tweet_url, created_at):
             print(f"❌ 飞书推送异常: {e}")
 
 async def fetch_latest_tweet_via_rss(username):
-    """【黑科技】通过免登录的公开匿名接口直接获取最新推文，免疫一切登录风控"""
-    # 备用公共节点，专门用来免登录扒推文
+    """【健壮版】使用正则表达式精准剥离 XML 数据，100% 防止切片卡死"""
     url = f"https://rsshub.app{username}"
-    # 如果上面那个节点慢，也可以尝试这个： f"https://nitter.net{username}/rss"
-    
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
-    async with httpx.AsyncClient(timeout=10.0) as client:
+    async with httpx.AsyncClient(timeout=15.0) as client:
         try:
             response = await client.get(url, headers=headers)
             if response.status_code == 200 and "<item>" in response.text:
-                # 简单高效的 XML 解析提取最新一条推文
-                item = response.text.split("<item>")[1]
-                title = item.split("<title>")[1].split("</title>")[0]
-                # 清洗一下不必要的描述标签
-                if "<![CDATA[" in title:
-                    title = title.split("<![CDATA[")[1].split("]]>")[0]
-                
-                link = item.split("<link>")[1].split("</link>")[0]
-                pub_date = item.split("<pubDate>")[1].split("</pubDate>")[0]
-                
-                # 提取推文唯一ID作为去重锚点
-                tweet_id = link.split("/status/")[-1].strip()
-                return {"id": tweet_id, "text": title, "url": link, "date": pub_date}
+                # 提取第一个 <item> 块（即最新一条推文）
+                item_match = re.search(r'<item>(.*?)</item>', response.text, re.DOTALL)
+                if item_match:
+                    item_content = item_match.group(1)
+                    
+                    # 精准提取标题/文本
+                    title_match = re.search(r'<title><!\[CDATA\[(.*?)\]\]></title>', item_content)
+                    title = title_match.group(1) if title_match else "查看原推文内容"
+                    
+                    # 精准提取链接
+                    link_match = re.search(r'<link>(.*?)</link>', item_content)
+                    link = link_match.group(1).strip() if link_match else f"https://x.com{username}"
+                    
+                    # 精准提取时间
+                    date_match = re.search(r'<pubDate>(.*?)</pubDate>', item_content)
+                    pub_date = date_match.group(1) if date_match else datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # 剥离推文唯一 ID
+                    tweet_id = link.split("/status/")[-1].strip() if "/status/" in link else str(hash(title))
+                    
+                    return {"id": tweet_id, "text": title, "url": link, "date": pub_date}
         except Exception as e:
-            print(f"📡 匿名抓取中产生网络抖动: {e}")
+            print(f"📡 备用公共节点网络波动: {e}")
     return None
 
 async def main():
@@ -93,12 +99,14 @@ async def main():
 
             if last_id is None:
                 save_last_seen_id(latest_id)
-                print(f"📍 记忆库初始化，最新推文锚定为 ID: {latest_id}")
+                print(f"📍 记忆库初始化成功！最新推文锚定为 ID: {latest_id}")
             
             elif str(latest_id) != str(last_id):
                 print(f"🔥 捕获到新消息：{latest_id}")
                 save_last_seen_id(latest_id)
                 await send_to_feishu(tweet["text"], tweet["url"], tweet["date"])
+        else:
+            print("💤 未获取到有效数据，将在下一个10秒周期自动重试...")
         
         await asyncio.sleep(CHECK_INTERVAL)
         
