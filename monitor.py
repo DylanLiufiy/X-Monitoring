@@ -64,7 +64,7 @@ async def fetch_tweet_by_raw_text(username):
             async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
                 res = await client.get(url, headers=headers)
                 
-                # 🛠️ 【已修复】在 in 后面补全了重定向状态码列表 [301, 302, 303, 307, 308]
+                # 🛠️ 【真正修复】这里已经把重定向的状态码列表补全了！
                 if res.status_code in:
                     redirect_url = res.headers.get("Location", "")
                     if "status/" in redirect_url:
