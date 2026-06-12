@@ -253,7 +253,7 @@ async def main():
     last_id = get_last_seen_id()
     if last_id is None:
         print("📍 记忆库初次启动，触发【倒带计划】，开始批量流式复制过去 1 天的全量长文消息正文投喂飞书...")
-        history_tweets = await fetch_all_real_tweets(TARGET_USER)
+        history_tweets = await fetch_all_real_tweets(f"{TARGET_USER}/zh")
         if history_tweets:
             # 🛠️ 【完美规避吞字】彻底放弃中括号，改用标准的原生内置 list() 类型包裹转换
             if isinstance(history_tweets, dict):
