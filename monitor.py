@@ -5,7 +5,7 @@ import httpx
 import re
 import random
 from datetime import datetime
-import urllib.parse  # 💡【核心引入】用于将换行符全文本安全编码，彻底干掉 URL \n 报错
+import urllib.parse
 
 # ==================== 🛠️ 生产级配置中心 ====================
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK")
@@ -42,7 +42,6 @@ async def translate_via_gemini_ai(text):
 
     # 2. ⚡【Debug 终极闭环修复】多维矩阵精准段落拼接 + URL安全转义编码
     try:
-        # 💡【核心修复】使用 urllib.parse.quote 对带换行符的长文进行安全编码，彻底封死 'Invalid non-printable ASCII' 报错
         encoded_text = urllib.parse.quote(text)
         api_url = f"https://googleapis.com{encoded_text}"
         
@@ -137,7 +136,7 @@ async def send_to_feishu(title_label, original_text, created_at):
 async def fetch_all_real_tweets(username):
     """【流式全量提取矩阵】彻底废弃脆弱正则，用大块横切 + HTML强洗，100% 全量复制完整多行文本"""
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     nodes = ["https://xcancel.com", "https://d420.de", "https://fxtwitter.com"]
     
@@ -160,10 +159,10 @@ async def fetch_all_real_tweets(username):
                         if len(content_block) < 2:
                             continue
                             
-                        # 🛠️ 【核心修复】加入安全检查，防止对列表进行二次非法切片引发的 AttributeError 
-                        raw_content_segment = content_block
+                        # 🛠️ 提取核心文本
+                        raw_content_segment = content_block[1]
                         raw_content_list = raw_content_segment.split('</div>')
-                        raw_content = raw_content_list
+                        raw_content = raw_content_list[0]
                         raw_content = re.sub(r'^[^>]*>', '', raw_content)
                         
                         # 无损清洗排版标签，将其精准复原为纯换行
@@ -224,13 +223,13 @@ async def main():
         print("📍 记忆库初次启动，触发【倒带计划】，开始批量流式复制过去 1 天的全量长文消息正文投喂飞书...")
         history_tweets = await fetch_all_real_tweets(TARGET_USER)
         if history_tweets:
-            # 🛠️ 【安全加固】确保保底数据为标准合法的 List 数组包裹
+            # 🛠️ 【完美规避吞字】彻底放弃中括号，改用标准的原生内置 list() 类型包裹转换
             if isinstance(history_tweets, dict):
-                history_tweets = 
+                history_tweets = list(history_tweets)
             for tweet in reversed(history_tweets):
                 await send_to_feishu("历史回溯中译", tweet["text"], tweet["date"])
                 await asyncio.sleep(2)
-  
+            
             save_last_seen_id(history_tweets[0]["id"])
             print(f"✅ 历史全量多段落纯文本研报自动补发中译完毕！")
         else:
@@ -242,7 +241,7 @@ async def main():
             history_tweets = await fetch_all_real_tweets(TARGET_USER)
             if history_tweets:
                 if isinstance(history_tweets, dict):
-                    history_tweets = [history_tweets]
+                    history_tweets = list(history_tweets)
                 latest_tweet = history_tweets[0]
                 latest_id = latest_tweet["id"]
                 current_last_id = get_last_seen_id()
