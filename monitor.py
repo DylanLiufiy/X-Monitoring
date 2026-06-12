@@ -60,11 +60,11 @@ async def fetch_tweet_by_raw_text(username):
     for node in nodes:
         url = f"{node}/{username}"
         try:
-            # 💡 follow_redirects=False，彻底封死 Exceeded maximum allowed redirects 报错
+            # follow_redirects=False，彻底封死 Exceeded maximum allowed redirects 报错
             async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
                 res = await client.get(url, headers=headers)
                 
-                # 🛠️ 【已修复】在 in 后面补全了状态码列表 [301, 302]
+                # 🛠️ 【已修复】在 in 后面补全了重定向状态码列表 [301, 302, 303, 307, 308]
                 if res.status_code in:
                     redirect_url = res.headers.get("Location", "")
                     if "status/" in redirect_url:
