@@ -1,48 +1,7 @@
-name: X 10s Realtime Monitor
-
-on:
-  push:
-    branches: [ main ]
-  schedule:
-    # 每 5 分钟定时唤醒一次。触发时若老任务没死，该新任务会自动在后台排队 pending。
-    # 这样老任务一死，新任务 1 秒之内无缝接上，从而拼接成 10 秒不间断监控。
-    - cron: '*/5 * * * *'
-
-jobs:
-  monitor:
-    runs-on: ubuntu-latest
-    concurrency:
-      group: x-high-frequency-group
-      cancel-in-progress: false # 关键：绝对不强杀正在运行的老循环，让其自然老死
-
-    steps:
-    - name: 📥 1. 拉取仓库代码
-      uses: actions/checkout@v3
-
-    - name: 🐍 2. 部署云端 Python
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.10'
-
-    - name: 💾 3. 恢复长效状态缓存 (传递Cookie和推文ID)
-      uses: actions/cache@v3
-      with:
-        path: |
-          last_seen_id.txt
-          cookies.json
-        key: monitor-cache-${{ github.run_id }}
-        restore-keys: |
-          monitor-cache-
-
-    - name: 📦 4. 补齐依赖组件
-      run: |
-        python -m pip install --upgrade pip
-        pip install -r requirements.txt
-
-    - name: 📡 5. 启动 5.8小时 永续高频扫描
+ - name: 📡 5. 启动 5.8小时 永续高频扫描
       env:
         X_USERNAME: ${{ secrets.X_USERNAME }}
         X_EMAIL: ${{ secrets.X_EMAIL }}
         X_PASSWORD: ${{ secrets.X_PASSWORD }}
         FEISHU_WEBHOOK: ${{ secrets.FEISHU_WEBHOOK }}
-      run: python monitor.py
+      run: python -u monitor.py     # 👈 关键点：在 python 后面加上 -u 参数
