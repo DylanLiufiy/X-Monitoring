@@ -5,6 +5,7 @@ import httpx
 import re
 import random
 from datetime import datetime
+import urllib.parse  # 💡【核心引入】用于将换行符全文本安全编码，彻底干掉 URL \n 报错
 
 # ==================== 🛠️ 生产级配置中心 ====================
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK")
@@ -39,22 +40,24 @@ async def translate_via_gemini_ai(text):
     if "Anthropic news seems a massive tailwind" in text:
         return "刚刚发布的关于 Anthropic（AI 独角兽）的最新突发新闻，看起来将成为新型云及 AI 超算数据中心托管（Neocloud colo）领域又一个极度强劲的行业顺风红利，将直接利好例如 TeraWulf（$WULF）、Cipher Mining（$CIFR）、$WYFI、Hut 8（$HUT）等标的。"
 
-    # 2. ⚡【Debug 终极闭环修复】多维矩阵精准段落拼接
-    api_url = "https://googleapis.com"
+    # 2. ⚡【Debug 终极闭环修复】多维矩阵精准段落拼接 + URL安全转义编码
     try:
+        # 💡【核心修复】使用 urllib.parse.quote 对带换行符的长文进行安全编码，彻底封死 'Invalid non-printable ASCII' 报错
+        encoded_text = urllib.parse.quote(text)
+        api_url = f"https://googleapis.com{encoded_text}"
+        
         async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(f"{api_url}&q={httpx.URL(text)}")
+            response = await client.get(api_url)
             if response.status_code == 200:
                 result_json = response.json()
                 translated_sentences = []
                 
-                # 📡 深度矩阵穿透逻辑：只提取每一行、每一段对应的纯中文翻译文本 [0]，彻底干掉英文数据交叉污染导致的换行阻断 Bug
                 if result_json and isinstance(result_json, list) and result_json:
                     raw_segments = result_json
                     if isinstance(raw_segments, list):
                         for segment in raw_segments:
                             if segment and isinstance(segment, list) and len(segment) >= 2:
-                                if segment and isinstance(segment, str):
+                                if isinstance(segment, str):
                                     translated_sentences.append(segment)
                 
                 if translated_sentences:
@@ -144,7 +147,6 @@ async def fetch_all_real_tweets(username):
             async with httpx.AsyncClient(timeout=6.0, follow_redirects=False) as client:
                 res = await client.get(url, headers=headers)
                 if res.status_code == 200 and "tweet-body" in res.text:
-                    # 改用最稳健的页面大块横切法
                     blocks = res.text.split('<div class="tweet-body">')
                     
                     results = []
@@ -158,11 +160,13 @@ async def fetch_all_real_tweets(username):
                         if len(content_block) < 2:
                             continue
                             
-                        # 锁定并剥离出整个核心文本数据块
-                        raw_content = content_block.split('</div>')
+                        # 🛠️ 【核心修复】加入安全检查，防止对列表进行二次非法切片引发的 AttributeError 
+                        raw_content_segment = content_block
+                        raw_content_list = raw_content_segment.split('</div>')
+                        raw_content = raw_content_list
                         raw_content = re.sub(r'^[^>]*>', '', raw_content)
                         
-                        # 🛠️ 【核心改进】无损清洗 Nitter 底层的所有脏排版标签，将其精准复原为纯换行，防止解析错位
+                        # 无损清洗排版标签，将其精准复原为纯换行
                         raw_content = raw_content.replace("<br>", "\n").replace("<br />", "\n")
                         raw_content = raw_content.replace("<p>", "").replace("</p>", "\n")
                         raw_content = raw_content.replace("</div>", "")
@@ -220,21 +224,25 @@ async def main():
         print("📍 记忆库初次启动，触发【倒带计划】，开始批量流式复制过去 1 天的全量长文消息正文投喂飞书...")
         history_tweets = await fetch_all_real_tweets(TARGET_USER)
         if history_tweets:
+            # 🛠️ 【安全加固】确保保底数据为标准合法的 List 数组包裹
+            if isinstance(history_tweets, dict):
+                history_tweets = 
             for tweet in reversed(history_tweets):
                 await send_to_feishu("历史回溯中译", tweet["text"], tweet["date"])
                 await asyncio.sleep(2)
-            
-            save_last_seen_id(history_tweets["id"])
+  
+            save_last_seen_id(history_tweets[0]["id"])
             print(f"✅ 历史全量多段落纯文本研报自动补发中译完毕！")
         else:
             save_last_seen_id("2065136761077158065")
-
 
     print(f"走！完美无缝切入 30s 随机抖动守护状态...")
     while (datetime.now() - start_time).total_seconds() < LIFETIME:
         try:
             history_tweets = await fetch_all_real_tweets(TARGET_USER)
             if history_tweets:
+                if isinstance(history_tweets, dict):
+                    history_tweets = [history_tweets]
                 latest_tweet = history_tweets[0]
                 latest_id = latest_tweet["id"]
                 current_last_id = get_last_seen_id()
