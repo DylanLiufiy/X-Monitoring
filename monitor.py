@@ -30,7 +30,7 @@ def save_last_seen_id(tweet_id):
         f.write(str(tweet_id))
 
 async def translate_via_gemini_ai(text):
-    """【最终完美闭环版】100% 柔性多段落结构拼接解析，确保推文长文零漏网"""
+    """【带深度诊断日志版】100% 打印解析细节，彻底抓出未翻译的幕后黑手"""
     if not text or not text.strip():
         return ""
         
@@ -45,12 +45,15 @@ async def translate_via_gemini_ai(text):
     if "Just some reflection" in text and "2025 aged super well" in text:
         return "做个随感反思：我 2025 年推荐的那些核心高确信度标的和投资主线（从 $ALAB 的 $97 到 $372，从 $LITE 的 $330 到 $904，从 $AAOI 的 $30 到 $175，以及像 $RKLB、台湾半导体 $TSM 等），随着时间的推移，现在看成长和兑现得超级好！这还是在我几乎没有粉丝关注的时候。虽然在更多公开信息披露之前，我早期的技术细节产生了一点偏差，并在光模块过渡过程中对 ALAB 失去了确信度。但那是在 AAOI 还是市值仅 30 亿美元的小公司时（现在约 140 亿美元）。所以也许今天处于同一市值的其他潜力个股，比如 $SIVE（应用光电同行/新硅光），应该获得更多关注？但我很高兴大部分标的都成长得超级棒。我想我最近粉丝群的暴增，正是因为大家亲眼见证了我的投资想法（如 $AXTI）一步步随着时间推移被市场强势验证！"
 
-    # 2. ⚡ 边缘网关分布式多段落并发穿透
+    # 2. 边缘网关分布式多段落并发穿透
     encoded_text = urllib.parse.quote(text)
     api_urls = [
         f"https://googleapis.com{encoded_text}",
         f"https://google.com{encoded_text}"
     ]
+
+    print(f"\n==================== 🔍 开启AI翻译诊断：长度 {len(text)} ====================")
+    print(f"【待翻原文前50字】: {text[:50]}...")
 
     for url in api_urls:
         try:
@@ -59,22 +62,27 @@ async def translate_via_gemini_ai(text):
                 if response.status_code == 200:
                     result_json = response.json()
                     
-                    # 💡 【核心重构：多行/多段落柔性遍历提取】
-                    # 标准谷歌单接口格式：最外层是 list，且第 0 个元素包含了所有拆分的分句列表
+                    # 🔍 打印第一层数据结构日志
+                    print(f"【成功连通网关】: {url.split('?')[0]}")
+                    print(f"【返回数据类型】: {type(result_json)}")
+                    
                     if result_json and isinstance(result_json, list) and len(result_json) > 0:
                         sentences_list = result_json[0]
+                        print(f"【分句矩阵大小】: {len(sentences_list) if isinstance(sentences_list, list) else '非列表'}")
+                        
                         if isinstance(sentences_list, list):
                             translated_sentences = []
-                            for item in sentences_list:
-                                # 确保 item 是列表，并且它内部的第 0 个元素就是我们要的该句中文翻译
+                            for idx, item in enumerate(sentences_list):
                                 if item and isinstance(item, list) and len(item) > 0:
                                     translated_part = item[0]
                                     if translated_part and isinstance(translated_part, str):
                                         translated_sentences.append(translated_part)
+                                        # 🔍 打印每一句解析到的文本碎片
+                                        print(f"    -> [分句 {idx}] 解析成功: {translated_part[:20]}...")
                             
                             if translated_sentences:
-                                # 精准拼接长文推文中的所有中文翻译句子
                                 translated_text = "".join(translated_sentences)
+                                print(f"【🎉 解析阶段成功】最终合并汉字字数: {len(translated_text)}")
                                 
                                 # 3. 润色特定半导体美股核心黑话
                                 finance_clean = {
@@ -87,10 +95,18 @@ async def translate_via_gemini_ai(text):
                                 for src, tgt in finance_clean.items():
                                     translated_text = translated_text.replace(src, tgt)
                                 return translated_text
-        except Exception:
-            continue # 节点自动熔断切流
+                            else:
+                                print("    ❌ [警告] 循环结束，但未收集到任何字符串碎片")
+                    else:
+                        # 🔍 捕获不匹配的特殊响应
+                        print(f"    ❌ [数据结构异常] 原始快照: {str(result_json)[:200]}")
+        except Exception as e:
+            print(f"    ❌ [网关请求/解析崩溃]: {str(e)}")
+            continue
 
     # 4. 极速字典兜底
+    print("🚨 【触发终极原文兜底】所有翻译解析管道均未成功交付中文")
+    print("====================================================================\n")
     translated = text
     dict_trans = {
         "Nvidia": "英伟达", "NVDA": "英伟达", "supply chain": "供应链", "Trump": "特朗普"
