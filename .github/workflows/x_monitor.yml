@@ -4,8 +4,8 @@ on:
   push:
     branches: [ main ]
   schedule:
-    # 依然保留 5 分钟唤醒。但由于开启了并发排队，只要前一个任务没死，后面的任务就会乖乖排队（Pending）。
-    # 确保当前面任务满 5.8 小时自杀时，排队队列里永远有一个新鲜的“接班人”立刻顶上。
+    # 每 5 分钟定时唤醒一次。触发时若老任务没死，该新任务会自动在后台排队 pending。
+    # 这样老任务一死，新任务 1 秒之内无缝接上，从而拼接成 10 秒不间断监控。
     - cron: '*/5 * * * *'
 
 jobs:
@@ -13,18 +13,18 @@ jobs:
     runs-on: ubuntu-latest
     concurrency:
       group: x-high-frequency-group
-      cancel-in-progress: false # 关键：绝对不能把正在运行的 10 秒死循环任务掐断！
+      cancel-in-progress: false # 关键：绝对不强杀正在运行的老循环，让其自然老死
 
     steps:
-    - name: 📥 1. 拉取代码
+    - name: 📥 1. 拉取仓库代码
       uses: actions/checkout@v3
 
-    - name: 🐍 2. 准备 Python 
+    - name: 🐍 2. 部署云端 Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.10'
 
-    - name: 💾 3. 恢复长效状态缓存
+    - name: 💾 3. 恢复长效状态缓存 (传递Cookie和推文ID)
       uses: actions/cache@v3
       with:
         path: |
@@ -34,12 +34,12 @@ jobs:
         restore-keys: |
           monitor-cache-
 
-    - name: 📦 4. 安装依赖
+    - name: 📦 4. 补齐依赖组件
       run: |
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
-    - name: 📡 5. 启动 5.8小时 常驻死循环监控
+    - name: 📡 5. 启动 5.8小时 永续高频扫描
       env:
         X_USERNAME: ${{ secrets.X_USERNAME }}
         X_EMAIL: ${{ secrets.X_EMAIL }}
