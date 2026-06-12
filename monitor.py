@@ -64,8 +64,8 @@ async def fetch_tweet_by_raw_text(username):
             async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
                 res = await client.get(url, headers=headers)
                 
-                # 🛠️ 【真正修复】这里已经把重定向的状态码列表补全了！
-                if res.status_code in:
+                # 🛠️ 【Debug 核心修复】彻底抛弃 in 语法，改用逻辑或运算符，确保不再被 Markdown 吞字！
+                if res.status_code == 301 or res.status_code == 302:
                     redirect_url = res.headers.get("Location", "")
                     if "status/" in redirect_url:
                         tweet_id = redirect_url.split("/status/")[-1].split("?")[0].strip()
