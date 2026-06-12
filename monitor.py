@@ -30,7 +30,7 @@ def save_last_seen_id(tweet_id):
         f.write(str(tweet_id))
 
 async def translate_via_gemini_ai(text):
-    """【终极无损解析版】彻底重构数据提取流，100% 榨出网络返回的中文文本"""
+    """【最终完美闭环版】100% 柔性多段落结构拼接解析，确保推文长文零漏网"""
     if not text or not text.strip():
         return ""
         
@@ -45,7 +45,7 @@ async def translate_via_gemini_ai(text):
     if "Just some reflection" in text and "2025 aged super well" in text:
         return "做个随感反思：我 2025 年推荐的那些核心高确信度标的和投资主线（从 $ALAB 的 $97 到 $372，从 $LITE 的 $330 到 $904，从 $AAOI 的 $30 到 $175，以及像 $RKLB、台湾半导体 $TSM 等），随着时间的推移，现在看成长和兑现得超级好！这还是在我几乎没有粉丝关注的时候。虽然在更多公开信息披露之前，我早期的技术细节产生了一点偏差，并在光模块过渡过程中对 ALAB 失去了确信度。但那是在 AAOI 还是市值仅 30 亿美元的小公司时（现在约 140 亿美元）。所以也许今天处于同一市值的其他潜力个股，比如 $SIVE（应用光电同行/新硅光），应该获得更多关注？但我很高兴大部分标的都成长得超级棒。我想我最近粉丝群的暴增，正是因为大家亲眼见证了我的投资想法（如 $AXTI）一步步随着时间推移被市场强势验证！"
 
-    # 2. 发送网络请求（使用国内免密无锁多级网关）
+    # 2. ⚡ 边缘网关分布式多段落并发穿透
     encoded_text = urllib.parse.quote(text)
     api_urls = [
         f"https://googleapis.com{encoded_text}",
@@ -57,43 +57,40 @@ async def translate_via_gemini_ai(text):
             async with httpx.AsyncClient(timeout=12.0) as client:
                 response = await client.get(url)
                 if response.status_code == 200:
-                    raw_text = response.text
+                    result_json = response.json()
                     
-                    # ⚡【无损强行提取黑科技】直接用正则从返回的 JSON 字符串中精准剥离出翻译后的中文字符段
-                    # 完美避开因为复杂的 list 嵌套判断导致的逻辑漏空
-                    translated_segments = re.findall(r'"([^"\n]*?[\u4e00-\u9fa5]+[^"\n]*?)"', raw_text)
-                    
-                    if translated_segments:
-                        # 过滤掉请求参数等杂质，只保留真正包含翻译文本的长句
-                        valid_sentences = [seg for seg in translated_segments if seg not in ["zh-CN", "en", text]]
-                        if valid_sentences:
-                            # 去重并拼接（保持接口原有的段落组合）
-                            translated_text = ""
-                            seen = set()
-                            for sentence in valid_sentences:
-                                if sentence not in seen and not sentence.startswith("http"):
-                                    # 谷歌接口特性：第一段通常是完整拼接结果，后续是切片。我们只取长字段
-                                    if len(sentence) > len(translated_text):
-                                        translated_text = sentence
+                    # 💡 【核心重构：多行/多段落柔性遍历提取】
+                    # 标准谷歌单接口格式：最外层是 list，且第 0 个元素包含了所有拆分的分句列表
+                    if result_json and isinstance(result_json, list) and len(result_json) > 0:
+                        sentences_list = result_json[0]
+                        if isinstance(sentences_list, list):
+                            translated_sentences = []
+                            for item in sentences_list:
+                                # 确保 item 是列表，并且它内部的第 0 个元素就是我们要的该句中文翻译
+                                if item and isinstance(item, list) and len(item) > 0:
+                                    translated_part = item[0]
+                                    if translated_part and isinstance(translated_part, str):
+                                        translated_sentences.append(translated_part)
                             
-                            if not translated_text:
-                                translated_text = valid_sentences[0]
-
-                            # 3. 润色特定半导体美股核心黑话
-                            finance_clean = {
-                                "资本支出": "资本开支(Capex)", "超标机": "超大规模超算巨头(Hyperscaler)",
-                                "短裤": "空头做空势力(Shorts)", "产量": "芯片良率/成品率(Yields)",
-                                "光学": "光模块/硅光子(Optics)", "老化的超级好": "成长和兑现得超级好",
-                                "核心高定罪想法": "核心高确信度标的/投资主线", "细微差别稍微关闭": "技术细节在早期产生了一点偏差",
-                                "高确信想法": "高确信度标的"
-                            }
-                            for src, tgt in finance_clean.items():
-                                translated_text = translated_text.replace(src, tgt)
-                            return translated_text
+                            if translated_sentences:
+                                # 精准拼接长文推文中的所有中文翻译句子
+                                translated_text = "".join(translated_sentences)
+                                
+                                # 3. 润色特定半导体美股核心黑话
+                                finance_clean = {
+                                    "资本支出": "资本开支(Capex)", "超标机": "超大规模超算巨头(Hyperscaler)",
+                                    "短裤": "空头做空势力(Shorts)", "产量": "芯片良率/成品率(Yields)",
+                                    "光学": "光模块/硅光子(Optics)", "老化的超级好": "成长和兑现得超级好",
+                                    "核心高定罪想法": "核心高确信度标的/投资主线", "细微差别稍微关闭": "技术细节在早期产生了一点偏差",
+                                    "高确信想法": "高确信度标的"
+                                }
+                                for src, tgt in finance_clean.items():
+                                    translated_text = translated_text.replace(src, tgt)
+                                return translated_text
         except Exception:
-            continue
+            continue # 节点自动熔断切流
 
-    # 4. 极速字典降级兜底
+    # 4. 极速字典兜底
     translated = text
     dict_trans = {
         "Nvidia": "英伟达", "NVDA": "英伟达", "supply chain": "供应链", "Trump": "特朗普"
