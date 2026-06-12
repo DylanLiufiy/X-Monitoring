@@ -229,7 +229,8 @@ async def main():
         else:
             save_last_seen_id("2065136761077158065")
 
-  print(f"走！完美无缝切入 30s 随机抖动守护状态...")
+
+    print(f"走！完美无缝切入 30s 随机抖动守护状态...")
     while (datetime.now() - start_time).total_seconds() < LIFETIME:
         try:
             history_tweets = await fetch_all_real_tweets(TARGET_USER)
