@@ -38,7 +38,12 @@ async def send_to_feishu(text, tweet_url, created_at):
             },
             "elements": [
                 {"tag": "markdown", "content": f"**📌 动态内容：**\n{text}\n\n**🕒 捕获时间：** {created_at}"},
-                {"tag": "action", "actions": [{"tag": "button", "text": {"tag": "plain_text", "content": "🔗 立即前往 X 跟踪供应链长文"}, "type": "primary", "url": tweet_url}]}
+                {"tag": "action", "actions": [{
+                    "tag": "button", 
+                    "text": {"tag": "plain_text", "content": "🔗 立即前往 X 跟踪供应链长文"}, 
+                    "type": "primary", 
+                    "url": tweet_url
+                }]}
             ]
         }
     }
@@ -55,8 +60,14 @@ async def fetch_tweet_by_raw_text(username):
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
-    # 采用高可达性的开放中转与静态只读节点矩阵
-    nodes = ["https://vxtwitter.com", "https://privacydev.net", "https://nitter.net"]
+    # 📡 【Debug 终极抗封锁节点矩阵】彻底干掉网关拥堵！
+    nodes = [
+        "https://vxtw.net",              # 最新抗封锁 JSON/HTML 双通道网关
+        "https://fixupx.com",                # 极其稳定的老牌 X 中转路由
+        "https://alexis.gg",          # 目前极速运行的高匿只读静态镜像
+        "https://twiiit.com"                 # 全球分布式自动分流推特静态网关
+    ]
+    
     for node in nodes:
         url = f"{node}/{username}"
         try:
@@ -64,12 +75,16 @@ async def fetch_tweet_by_raw_text(username):
             async with httpx.AsyncClient(timeout=8.0, follow_redirects=False) as client:
                 res = await client.get(url, headers=headers)
                 
-                # 🛠️ 【Debug 核心修复】彻底抛弃 in 语法，改用逻辑或运算符，确保不再被 Markdown 吞字！
+                # 情况一：如果触发 301/302 重定向，直接抓取 Location 报头里的真实推文链接
                 if res.status_code == 301 or res.status_code == 302:
                     redirect_url = res.headers.get("Location", "")
                     if "status/" in redirect_url:
                         tweet_id = redirect_url.split("/status/")[-1].split("?")[0].strip()
-                        return {"id": tweet_id, "text": "捕获到大牛更新了产业研报，请点击下方按钮前往追踪", "url": f"https://x.com{username}/status/{tweet_id}"}
+                        return {
+                            "id": tweet_id, 
+                            "text": "捕获到大牛更新了产业研报，请点击下方按钮前往追踪", 
+                            "url": f"https://x.com{username}/status/{tweet_id}"
+                        }
                 
                 # 情况二：正常 200 返回，直接正则检索网页文本
                 elif res.status_code == 200:
@@ -79,7 +94,11 @@ async def fetch_tweet_by_raw_text(username):
                         text_match = re.search(r'<meta property="og:description" content="(.*?)"', res.text) or re.search(r'<title>(.*?)</title>', res.text)
                         text = text_match.group(1) if text_match else "发布了全新的产业动态，请点击下方按钮一键追踪详情"
                         text = text.replace("&quot;", '"').replace("&amp;", "&").replace("&#39;", "'")
-                        return {"id": tweet_id, "text": text, "url": f"https://x.com{username}/status/{tweet_id}"}
+                        return {
+                            "id": tweet_id, 
+                            "text": text, 
+                            "url": f"https://x.com{username}/status/{tweet_id}"
+                        }
                         
         except Exception as node_err:
             print(f"📡 边缘节点 [{node}] 请求产生网络微调: {node_err}")
