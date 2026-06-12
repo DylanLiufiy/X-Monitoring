@@ -30,38 +30,28 @@ def save_last_seen_id(tweet_id):
         f.write(str(tweet_id))
 
 async def translate_via_gemini_ai(text):
-    """【自带翻译完美承接版】0次网络请求，完美对接镜像源自带中文，100%绝不报错"""
-    if not text or not text.strip():
-        return ""
-        
-    if "发布的最新核心供应链动态" in text:
-        return "捕获到大牛更新了全新的半导体硬件及 AI 物理供应链的核心产业研报。"
+    """【大模型直连通道】隔离失效代理，通过标准 API 进行翻译"""
+    # 替换为你实际使用的大模型基础路径和 Key
+    base_url = "https://deepseek.com" 
+    api_key = os.environ.get("DEEPSEEK_API_KEY")
 
-    # 1. 优先执行本地高频长文硬映射，确保核心研报绝对零延迟
-    if "wonder why indices and names" in text:
-        return "以防你们好奇为什么现在各大指数以及像闪迪（$SNDK）、美满电子（$MRVL）、Lumentum（$LITE）这些半导体个股突然集体翻绿暴涨：这是因为特朗普刚刚取消了对伊朗的军事打击行动。现在的市场波动率实在是太剧烈和疯狂了……"
-    if "Anthropic news seems a massive tailwind" in text:
-        return "刚刚发布的关于 Anthropic（AI 独角兽）的最新突发新闻，看起来将成为新型云及 AI 超算数据中心托管（Neocloud colo）领域又一个极度强劲的行业顺风红利，将直接利好例如 TeraWulf（$WULF）、Cipher Mining（$CIFR）、$WYFI、Hut 8（$HUT）等标的。"
-    if "Just some reflection" in text and "2025 aged super well" in text:
-        return "做个随感反思：我 2025 年推荐的那些核心高确信度标的和投资主线（从 $ALAB 的 $97 到 $372，从 $LITE 的 $330 到 $904，从 $AAOI 的 $30 到 $175，以及像 $RKLB、台湾半导体 $TSM 等），随着时间的推移，现在看成长和兑现得超级好！这还是在我几乎没有粉丝关注的时候。虽然在更多公开信息披露之前，我早期的技术细节产生了一点偏差，并在光模块过渡过程中对 ALAB 失去了确信度。但那是在 AAOI 还是市值仅 30 亿美元的小公司时（现在约 140 亿美元）。所以也许今天处于同一市值的其他潜力个股，比如 $SIVE（应用光电同行/新硅光），应该获得更多关注？但我很高兴大部分标的都成长得超级棒。我想我最近粉丝群的暴增，正是因为大家亲眼见证了我的投资想法（如 $AXTI）一步步随着时间推移被市场强势验证！"
-
-    print(f"\n==================== 🚀 成功启用 X 镜像源自带翻译：长度 {len(text)} ====================")
-
-    # 2. 润色特定半导体美股核心黑话
-    finance_clean = {
-        "资本支出": "资本开支(Capex)", "超标机": "超大规模超算巨头(Hyperscaler)",
-        "短裤": "空头做空势力(Shorts)", "产量": "芯片良率/成品率(Yields)",
-        "光学": "光模块/硅光子(Optics)", "老化的超级好": "成长和兑现得超级好",
-        "核心高定罪想法": "核心高确信度标的/投资主线", "细微差别稍微关闭": "技术细节在早期产生了一点偏差",
-        "高确信想法": "高确信度标的"
+    payload = {
+        "model": "deepseek-chat",
+        "messages": [
+            {"role": "system", "content": "你是一个半导体产业量化分析师，请将推文精准翻译为中文，保留行业美股术语。"},
+            {"role": "user", "content": text}
+        ]
     }
-    
-    # 镜像自带翻译下发后，在此处执行二次润色
-    translated_text = text
-    for src, tgt in finance_clean.items():
-        translated_text = translated_text.replace(src, tgt)
-        
-    return translated_text
+    try:
+        # 💡 核心仍是强制隔离环境变量 proxies={}, trust_env=False
+        async with httpx.AsyncClient(timeout=15.0, proxies={}, trust_env=False) as client:
+            headers = {"Authorization": f"Bearer {api_key}"}
+            res = await client.post(base_url, json=payload, headers=headers)
+            if res.status_code == 200:
+                return res.json()["choices"][0]["message"]["content"].strip()
+    except Exception as e:
+        print(f"大模型通信失败: {e}")
+    return text
     
 async def send_to_feishu(title_label, original_text, created_at):
     """【高仿 X 卡片视觉强化版】整合全量中译、原文物理隔离与底部法律免责"""
