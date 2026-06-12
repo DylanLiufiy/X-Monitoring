@@ -30,7 +30,7 @@ def save_last_seen_id(tweet_id):
         f.write(str(tweet_id))
 
 async def translate_via_gemini_ai(text):
-    """【带深度诊断日志版】100% 打印解析细节，彻底抓出未翻译的幕后黑手"""
+    """【有道免密直连版】彻底抛弃谷歌域名，解决 Name or service not known 报错"""
     if not text or not text.strip():
         return ""
         
@@ -45,67 +45,65 @@ async def translate_via_gemini_ai(text):
     if "Just some reflection" in text and "2025 aged super well" in text:
         return "做个随感反思：我 2025 年推荐的那些核心高确信度标的和投资主线（从 $ALAB 的 $97 到 $372，从 $LITE 的 $330 到 $904，从 $AAOI 的 $30 到 $175，以及像 $RKLB、台湾半导体 $TSM 等），随着时间的推移，现在看成长和兑现得超级好！这还是在我几乎没有粉丝关注的时候。虽然在更多公开信息披露之前，我早期的技术细节产生了一点偏差，并在光模块过渡过程中对 ALAB 失去了确信度。但那是在 AAOI 还是市值仅 30 亿美元的小公司时（现在约 140 亿美元）。所以也许今天处于同一市值的其他潜力个股，比如 $SIVE（应用光电同行/新硅光），应该获得更多关注？但我很高兴大部分标的都成长得超级棒。我想我最近粉丝群的暴增，正是因为大家亲眼见证了我的投资想法（如 $AXTI）一步步随着时间推移被市场强势验证！"
 
-    # 2. 边缘网关分布式多段落并发穿透
+    # 2. ⚡ 切换为国内 100% 可解析的有道公网免密直连通道
     encoded_text = urllib.parse.quote(text)
-    api_urls = [
-        f"https://googleapis.com{encoded_text}",
-        f"https://google.com{encoded_text}"
-    ]
+    url = f"https://youdao.com{encoded_text}"
 
-    print(f"\n==================== 🔍 开启AI翻译诊断：长度 {len(text)} ====================")
-    print(f"【待翻原文前50字】: {text[:50]}...")
+    print(f"\n==================== 🔍 有道AI翻译诊断：长度 {len(text)} ====================")
+    print(f"【待翻原文前50字】: {text[:50].replace('\n', ' ')}...")
 
-    for url in api_urls:
-        try:
-            async with httpx.AsyncClient(timeout=12.0) as client:
-                response = await client.get(url)
-                if response.status_code == 200:
-                    result_json = response.json()
-                    
-                    # 🔍 打印第一层数据结构日志
-                    print(f"【成功连通网关】: {url.split('?')[0]}")
-                    print(f"【返回数据类型】: {type(result_json)}")
-                    
-                    if result_json and isinstance(result_json, list) and len(result_json) > 0:
-                        sentences_list = result_json[0]
-                        print(f"【分句矩阵大小】: {len(sentences_list) if isinstance(sentences_list, list) else '非列表'}")
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            # 模拟标准移动端浏览器头
+            headers = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 14_0 like Mac OS X) AppleWebKit/605.1.15"}
+            response = await client.get(url, headers=headers)
+            
+            if response.status_code == 200:
+                result_json = response.json()
+                
+                # 有道Suggest接口的多维柔性长句机翻提取
+                if result_json and "data" in result_json and "entries" in result_json["data"]:
+                    entries = result_json["data"]["entries"]
+                    if entries and isinstance(entries, list):
+                        translated_text = ""
+                        # 优先寻找长句整段翻译
+                        for entry in entries:
+                            if "translate" in entry:
+                                translated_text = entry["translate"]
+                                break
                         
-                        if isinstance(sentences_list, list):
-                            translated_sentences = []
-                            for idx, item in enumerate(sentences_list):
-                                if item and isinstance(item, list) and len(item) > 0:
-                                    translated_part = item[0]
-                                    if translated_part and isinstance(translated_part, str):
-                                        translated_sentences.append(translated_part)
-                                        # 🔍 打印每一句解析到的文本碎片
-                                        print(f"    -> [分句 {idx}] 解析成功: {translated_part[:20]}...")
+                        if not translated_text and "explain" in entries[0]:
+                            translated_text = entries[0]["explain"]
+
+                        if translated_text:
+                            print(f"【🎉 有道解析成功】成功获取到中文翻译")
                             
-                            if translated_sentences:
-                                translated_text = "".join(translated_sentences)
-                                print(f"【🎉 解析阶段成功】最终合并汉字字数: {len(translated_text)}")
-                                
-                                # 3. 润色特定半导体美股核心黑话
-                                finance_clean = {
-                                    "资本支出": "资本开支(Capex)", "超标机": "超大规模超算巨头(Hyperscaler)",
-                                    "短裤": "空头做空势力(Shorts)", "产量": "芯片良率/成品率(Yields)",
-                                    "光学": "光模块/硅光子(Optics)", "老化的超级好": "成长和兑现得超级好",
-                                    "核心高定罪想法": "核心高确信度标的/投资主线", "细微差别稍微关闭": "技术细节在早期产生了一点偏差",
-                                    "高确信想法": "高确信度标的"
-                                }
-                                for src, tgt in finance_clean.items():
-                                    translated_text = translated_text.replace(src, tgt)
-                                return translated_text
-                            else:
-                                print("    ❌ [警告] 循环结束，但未收集到任何字符串碎片")
-                    else:
-                        # 🔍 捕获不匹配的特殊响应
-                        print(f"    ❌ [数据结构异常] 原始快照: {str(result_json)[:200]}")
-        except Exception as e:
-            print(f"    ❌ [网关请求/解析崩溃]: {str(e)}")
-            continue
+                            # 3. 润色特定半导体美股核心黑话
+                            finance_clean = {
+                                "资本支出": "资本开支(Capex)", "超标机": "超大规模超算巨头(Hyperscaler)",
+                                "短裤": "空头做空势力(Shorts)", "产量": "芯片良率/成品率(Yields)",
+                                "光学": "光模块/硅光子(Optics)", "老化的超级好": "成长和兑现得超级好",
+                                "核心高定罪想法": "核心高确信度标的/投资主线", "细微差别稍微关闭": "技术细节在早期产生了一点偏差",
+                                "高确信想法": "高确信度标的"
+                            }
+                            for src, tgt in finance_clean.items():
+                                translated_text = translated_text.replace(src, tgt)
+                            return translated_text
+            
+            # 如果进入suggest普通提取失败，尝试使用有道备用网页轻量流
+            print("    ⚠️ [有道A通道未交付长句] 切换有道B通道截获...")
+            backup_url = f"https://youdao.com{encoded_text}"
+            res_bak = await client.get(backup_url, headers=headers)
+            if res_bak.status_code == 200:
+                bak_json = res_bak.json()
+                if "fanyi" in bak_json and "tran" in bak_json["fanyi"]:
+                    return bak_json["fanyi"]["tran"]
+
+    except Exception as e:
+        print(f"    ❌ [有道网关请求/解析崩溃]: {str(e)}")
 
     # 4. 极速字典兜底
-    print("🚨 【触发终极原文兜底】所有翻译解析管道均未成功交付中文")
+    print("🚨 【触发终极原文兜底】国内直连通道未成功交付中文")
     print("====================================================================\n")
     translated = text
     dict_trans = {
