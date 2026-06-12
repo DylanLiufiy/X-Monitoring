@@ -71,16 +71,16 @@ async def send_to_feishu(title_label, original_text, created_at):
     # 执行 100% 穿透全量汉化
     chinese_text = translate_to_financial_chinese(original_text)
     
-    # ⚖️ 标准合规风险隔离文本（使用底部小字斜体进行合规隔离）
+    # ⚖️ 标准合规风险隔离文本
     disclaimer_text = (
         "----\n"
         "⚠️ **【法律免责声明】**\n"
-        "*本信息由量化智慧系统抓取并翻译，仅作为公开技术研究及客观数据参考，"
+        "*本信息由量化智能系统抓取并翻译，仅作为公开技术研究及客观数据参考，"
         "绝不构成任何实质性投资建议、要约、邀约邀请或咨询意见。市场有风险，投资需谨慎。"
         "因参考或依赖本信息内容而导致的任何直接或间接投资损失，本系统、代码运行方及技术支持方均不承担任何法律合规责任。*"
     )
     
-    # 🎨 利用飞书高级 Markdown 的『绿色高亮块 (green)』和『灰色引用块 (>)』等比复刻 X 平台推文卡片视觉
+    # 🎨 视觉排版等比复刻 X 平台推文卡片效果
     card_content = (
         f"👤 **推特博主**：@{TARGET_USER} (Serenity)\n"
         f"🕒 **发布时间**：{created_at}\n"
@@ -172,7 +172,8 @@ async def main():
                 await send_to_feishu("历史回溯中译", tweet["text"], tweet["date"])
                 await asyncio.sleep(2)
             
-            save_last_seen_id(history_tweets["id"])
+            # 🛠️ 【Debug 核心修正一】锁定列表第 0 项对象的 ['id']，彻底干掉 TypeError
+            save_last_seen_id(history_tweets[0]["id"])
             print(f"✅ 历史全量纯文本研报自动补发中译完毕！")
         else:
             save_last_seen_id("2065136761077158064")
@@ -182,7 +183,8 @@ async def main():
         try:
             history_tweets = await fetch_all_real_tweets(TARGET_USER)
             if history_tweets:
-                latest_tweet = history_tweets
+                # 🛠️ 【Debug 核心修正二】加入对列表第一位的对象访问防护
+                latest_tweet = history_tweets[0]
                 latest_id = latest_tweet["id"]
                 current_last_id = get_last_seen_id()
 
