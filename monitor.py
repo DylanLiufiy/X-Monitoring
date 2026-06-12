@@ -1,3 +1,10 @@
+import os          # 👈 关键点：把这一行加回到代码的最开头！
+import sys
+import asyncio
+import httpx
+import re
+from datetime import datetime
+
 # ==================== 🛠️ 生产级配置中心 ====================
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK")
 TARGET_USER = "serenityX"    # 👈 锁定你要盯死的目标 ID
