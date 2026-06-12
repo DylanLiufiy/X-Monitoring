@@ -30,11 +30,10 @@ def save_last_seen_id(tweet_id):
 
 async def translate_via_gemini_ai(text):
     """【AI核心】调用免鉴权的开放大模型直连通道，进行整句极速金融级中译"""
-    # 过滤占位文本
     if "发布的最新核心供应链动态" in text:
         return "捕获到大牛更新了全新的半导体硬件及 AI 物理供应链的核心产业研报。"
 
-    # 1. 优先执行本地高频长文硬映射，确保核心研报绝对零延迟、不消耗任何外部配额
+    # 1. 优先执行本地高频长文硬映射，确保核心研报绝对零延迟
     if "wonder why indices and names" in text:
         return "以防你们好奇为什么现在各大指数以及像闪迪（$SNDK）、美满电子（$MRVL）、Lumentum（$LITE）这些半导体个股突然集体翻绿暴涨：这是因为特朗普刚刚取消了对伊朗的军事打击行动。现在的市场波动率实在是太剧烈和疯狂了……"
     if "Anthropic news seems a massive tailwind" in text:
@@ -42,15 +41,14 @@ async def translate_via_gemini_ai(text):
     if "Just some reflection" in text and "2025 aged super well" in text:
         return "做个随感反思：我 2025 年推荐的那些核心高确信度标的和投资主线，随着时间的推移，现在看成长发展得超级好，复利效应非常完美。"
 
-    # 2. ⚡【黑科技】对于任何未知、突发的全新英文字句，直接穿透到开放的大模型语义网关执行秒级金融本地化翻译
-    # 这种做法完全不需要你在 GitHub 里面配置复杂的 GEMINI_API_KEY，云端直接托管直连
+    # 2. ⚡【黑科技】穿透大模型语义网关执行秒级金融本地化翻译
     api_url = "https://googleapis.com"
     try:
         async with httpx.AsyncClient(timeout=5.0) as client:
             response = await client.get(f"{api_url}&q={httpx.URL(text)}")
             if response.status_code == 200:
                 result_json = response.json()
-                translated_sentences = [part for part in result_json if part]
+                translated_sentences = [part[0] for part in result_json[0] if part and part[0]]
                 if translated_sentences:
                     translated_text = "".join(translated_sentences)
                     
@@ -66,7 +64,7 @@ async def translate_via_gemini_ai(text):
     except Exception:
         pass
 
-    # 3. 极速兜底：如果外部大模型网关瞬时抖动，使用本地基础字典拼装
+    # 3. 极速兜底
     translated = text
     dict_trans = {
         "Nvidia": "英伟达", "NVDA": "英伟达", "supply chain": "供应链", "Trump": "特朗普"
@@ -79,19 +77,16 @@ async def send_to_feishu(title_label, original_text, created_at):
     """【高仿 X 卡片视觉强化版】整合全量中译、原文物理隔离与底部法律免责"""
     headers = {"Content-Type": "application/json"}
     
-    # 🧠 调用动态 AI 整句汉化引擎
     chinese_text = await translate_via_gemini_ai(original_text)
     
-    # ⚖️ 标准合规风险隔离文本
     disclaimer_text = (
         "----\n"
         "⚠️ **【法律免责声明】**\n"
-        "*本信息由量化智能系统自动抓取并翻译，仅作为公开技术研究及客观数据参考，"
+        "*本信息由量化自动化雷达脚本自动抓取并翻译，仅作为海外公开技术研究及客观数据参考，"
         "绝不构成任何实质性投资建议、要约、邀约邀请或咨询意见。市场有风险，投资需谨慎。"
         "因参考或依赖本信息内容而导致的任何直接或间接投资损失，本系统、代码运行方及技术支持方均不承担任何法律合规责任。*"
     )
     
-    # 🎨 视觉排版等比复刻 X 平台推文卡片效果
     card_content = (
         f"👤 **推特博主**：@{TARGET_USER} (Serenity)\n"
         f"🕒 **发布时间**：{created_at}\n"
@@ -144,7 +139,7 @@ async def fetch_all_real_tweets(username):
                             
                             if id_match and content_match:
                                 tid = id_match.group(1)
-                                raw_content = content_match.group(2)
+                                raw_content = content_match.group(1)
                                 clean_text = re.sub(r'<[^>]+>', '', raw_content).strip()
                                 clean_text = clean_text.replace("&quot;", '"').replace("&amp;", "&").replace("&#39;", "'")
                                 
@@ -184,7 +179,8 @@ async def main():
                 await send_to_feishu("历史回溯中译", tweet["text"], tweet["date"])
                 await asyncio.sleep(2)
             
-            save_last_seen_id(history_tweets["id"])
+            # 🛠️ 【已死死锁定修复】加入核心首项指针 [0]，干掉第 187 行异常
+            save_last_seen_id(history_tweets[0]["id"])
             print(f"✅ 历史全量纯文本研报自动补发中译完毕！")
         else:
             save_last_seen_id("2065136761077158065")
@@ -194,7 +190,8 @@ async def main():
         try:
             history_tweets = await fetch_all_real_tweets(TARGET_USER)
             if history_tweets:
-                latest_tweet = history_tweets
+                # 🛠️ 【已死死锁定修复】加入核心首项指针 [0]，干掉第 197 行异常
+                latest_tweet = history_tweets[0]
                 latest_id = latest_tweet["id"]
                 current_last_id = get_last_seen_id()
 
