@@ -1,25 +1,17 @@
 import os
 import sys
-import json
 import asyncio
 import httpx
 from datetime import datetime
-from twikit import Client
 
 # ==================== 🛠️ 生产级配置中心 ====================
-X_USERNAME = os.environ.get("X_USERNAME")
-X_EMAIL = os.environ.get("X_EMAIL")
-X_PASSWORD = os.environ.get("X_PASSWORD")
 FEISHU_WEBHOOK = os.environ.get("FEISHU_WEBHOOK")
-
-TARGET_USER = "serenityX"
+TARGET_USER = "serenityX"    # 👈 记得改成你实际要盯着的账号
 CHECK_INTERVAL = 10          # 🔥 严格 10 秒刷新一次
-LIFETIME = 21000             # 🔥 运行 5.8 小时自动优雅退出，让位给下一个轮班容器
+LIFETIME = 21000             # 🔥 运行 5.8 小时自动优雅退出
 # =======================================================
 
-client = Client('en-US')
 CACHE_FILE = "last_seen_id.txt"
-COOKIE_FILE = "cookies.json"
 
 def get_last_seen_id():
     if os.path.exists(CACHE_FILE):
@@ -54,55 +46,59 @@ async def send_to_feishu(text, tweet_url, created_at):
         except Exception as e:
             print(f"❌ 飞书推送异常: {e}")
 
+async def fetch_latest_tweet_via_rss(username):
+    """【黑科技】通过免登录的公开匿名接口直接获取最新推文，免疫一切登录风控"""
+    # 备用公共节点，专门用来免登录扒推文
+    url = f"https://rsshub.app{username}"
+    # 如果上面那个节点慢，也可以尝试这个： f"https://nitter.net{username}/rss"
+    
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    }
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        try:
+            response = await client.get(url, headers=headers)
+            if response.status_code == 200 and "<item>" in response.text:
+                # 简单高效的 XML 解析提取最新一条推文
+                item = response.text.split("<item>")[1]
+                title = item.split("<title>")[1].split("</title>")[0]
+                # 清洗一下不必要的描述标签
+                if "<![CDATA[" in title:
+                    title = title.split("<![CDATA[")[1].split("]]>")[0]
+                
+                link = item.split("<link>")[1].split("</link>")[0]
+                pub_date = item.split("<pubDate>")[1].split("</pubDate>")[0]
+                
+                # 提取推文唯一ID作为去重锚点
+                tweet_id = link.split("/status/")[-1].strip()
+                return {"id": tweet_id, "text": title, "url": link, "date": pub_date}
+        except Exception as e:
+            print(f"📡 匿名抓取中产生网络抖动: {e}")
+    return None
+
 async def main():
-    if not all([X_USERNAME, X_EMAIL, X_PASSWORD, FEISHU_WEBHOOK]):
-        print("❌ 错误：GitHub Secrets 环境变量配置不完整！")
+    if not FEISHU_WEBHOOK:
+        print("❌ 错误：飞书 Webhook 环境变量未配置！")
         sys.exit(1)
 
-    print("🔐 正在初始化 X 平台登录状态...")
-    try:
-        if os.path.exists(COOKIE_FILE):
-            client.load_cookies(COOKIE_FILE)
-            print("🍪 成功从本地缓存加载 Cookie 绕过登录验证！")
-        else:
-            print("🔑 未检测到本地 Cookie，正在使用账号密码登录...")
-            await client.login(auth_info_1=X_USERNAME, auth_info_2=X_EMAIL, password=X_PASSWORD)
-            client.save_cookies(COOKIE_FILE)
-            print("💾 首次登录成功，已成功将 Cookie 固化到本地")
-    except Exception as e:
-        print(f"❌ 登录遇到安全阻断: {e}")
-        sys.exit(1)
-
-    try:
-        user = await client.get_user_by_screen_name(TARGET_USER)
-        target_id = user.id
-        print(f"🎯 成功锁定目标账号 ID: {target_id}")
-    except Exception as e:
-        print(f"❌ 无法解析目标用户名: {e}")
-        return
-
+    print(f"🎯 免登录雷达已开启，锁定目标: {TARGET_USER}")
     start_time = datetime.now()
     print(f"🛰️ 10秒级高频常驻守护进程已激活，本轮监听将持续 5.8 小时...")
 
     while (datetime.now() - start_time).total_seconds() < LIFETIME:
-        try:
-            tweets = await client.get_user_tweets(target_id, 'Tweets')
-            if tweets:
-                latest_tweet = tweets
-                last_id = get_last_seen_id()
+        tweet = await fetch_latest_tweet_via_rss(TARGET_USER)
+        if tweet:
+            latest_id = tweet["id"]
+            last_id = get_last_seen_id()
 
-                if last_id is None:
-                    save_last_seen_id(latest_tweet.id)
-                    print(f"📍 记忆库初始化，最新推文锚定为 ID: {latest_tweet.id}")
-                
-                elif str(latest_tweet.id) != str(last_id):
-                    print(f"🔥 捕获到新消息：{latest_tweet.id}")
-                    save_last_seen_id(latest_tweet.id)
-                    tweet_url = f"https://x.com{TARGET_USER}/status/{latest_tweet.id}"
-                    await send_to_feishu(latest_tweet.text, tweet_url, latest_tweet.created_at)
-                    
-        except Exception as e:
-            print(f"⚠ 高频检测产生正常抖动或被限流: {e}")
+            if last_id is None:
+                save_last_seen_id(latest_id)
+                print(f"📍 记忆库初始化，最新推文锚定为 ID: {latest_id}")
+            
+            elif str(latest_id) != str(last_id):
+                print(f"🔥 捕获到新消息：{latest_id}")
+                save_last_seen_id(latest_id)
+                await send_to_feishu(tweet["text"], tweet["url"], tweet["date"])
         
         await asyncio.sleep(CHECK_INTERVAL)
         
